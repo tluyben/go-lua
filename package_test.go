@@ -2,7 +2,8 @@ package lua_test
 
 import (
 	"fmt"
-	"github.com/Shopify/go-lua"
+
+	"github.com/tluyben/go-lua"
 )
 
 type step struct {
