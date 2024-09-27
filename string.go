@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"unicode"
 )
@@ -181,8 +182,83 @@ var stringLibrary = []RegistryFunction{
 		l.PushString(formatHelper(l, CheckString(l, 1), l.Top()))
 		return 1
 	}},
-	// {"gmatch", ...},
-	// {"gsub", ...},
+	{"gmatch", func(l *State) int {
+		s, p := CheckString(l, 1), CheckString(l, 2)
+		init := relativePosition(OptInteger(l, 3, 1), len(s))
+		if init < 1 {
+			init = 1
+		} else if init > len(s)+1 {
+			l.PushNil()
+			return 1
+		}
+		isPlain := l.TypeOf(4) == TypeNone || l.ToBoolean(4)
+		if isPlain || !strings.ContainsAny(p, "^$*+?.([%-") {
+			matches := make([]string, 0)
+			for start := init - 1; start < len(s); start++ {
+				if strings.HasPrefix(s[start:], p) {
+					matches = append(matches, s[start:start+len(p)])
+				}
+			}
+			if len(matches) > 0 {
+				for _, match := range matches {
+					l.PushString(match)
+				}
+				return len(matches)
+			}
+		} else {
+			pattern := "^" + strings.ReplaceAll(p, "%", "%%")
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				Errorf(l, fmt.Sprintf("invalid pattern: %s", err.Error()))
+			}
+			matches := re.FindAllString(s[init-1:], -1)
+			if len(matches) > 0 {
+				for _, match := range matches {
+					l.PushString(match)
+				}
+				return len(matches)
+			}
+		}
+		l.PushNil()
+		return 1
+	}},
+	{"gsub", func(l *State) int {
+		s, p, r := CheckString(l, 1), CheckString(l, 2), CheckString(l, 3)
+		init := relativePosition(OptInteger(l, 4, 1), len(s))
+		if init < 1 {
+			init = 1
+		} else if init > len(s)+1 {
+			l.PushString(s)
+			return 1
+		}
+		isPlain := l.TypeOf(5) == TypeNone || l.ToBoolean(5)
+		if isPlain || !strings.ContainsAny(p, "^$*+?.([%-") {
+			count := 0
+			result := ""
+			for start := init - 1; start < len(s); start++ {
+				if strings.HasPrefix(s[start:], p) {
+					count++
+					result += r
+					start += len(p) - 1
+				} else {
+					result += string(s[start])
+				}
+			}
+			l.PushString(result)
+			l.PushInteger(count)
+			return 2
+		} else {
+			pattern := "^" + strings.ReplaceAll(p, "%", "%%")
+			re, err := regexp.Compile(pattern)
+			if err != nil {
+				Errorf(l, fmt.Sprintf("invalid pattern: %s", err.Error()))
+			}
+			result := re.ReplaceAllString(s[init-1:], r)
+			l.PushString(result)
+			l.PushInteger(len(strings.Split(result, r)) - 1)
+			return 2
+		}
+	}},
 	{"len", func(l *State) int { l.PushInteger(len(CheckString(l, 1))); return 1 }},
 	{"lower", func(l *State) int { l.PushString(strings.ToLower(CheckString(l, 1))); return 1 }},
 	// {"match", ...},
